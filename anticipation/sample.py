@@ -73,7 +73,18 @@ def instr_logits(logits, full_history):
     return logits
 
 
-def add_token(model, z, tokens, top_p, current_time, debug=False):
+
+def masked_instr_logits(logits, masked_instrs):
+    """supress the given instruments"""
+    for instr in masked_instrs:
+        logits[
+            NOTE_OFFSET + instr * MAX_PITCH : NOTE_OFFSET + (instr + 1) * MAX_PITCH
+        ] = -float("inf")
+
+    return logits
+
+
+def add_token(model, z, tokens, top_p, current_time, masked_instrs, debug=False):
     assert len(tokens) % 3 == 0
 
     history = tokens.copy()
@@ -94,6 +105,7 @@ def add_token(model, z, tokens, top_p, current_time, debug=False):
                 logits = future_logits(logits, current_time - offset)
             elif i == 2:
                 logits = instr_logits(logits, tokens)
+            logits = masked_instr_logits(logits, masked_instrs)
             logits = nucleus(logits, top_p)
 
             probs = F.softmax(logits, dim=-1)
@@ -107,7 +119,7 @@ def add_token(model, z, tokens, top_p, current_time, debug=False):
     return new_token
 
 
-def generate(model, start_time, end_time, inputs=None, controls=None, top_p=1.0, debug=False, delta=DELTA*TIME_RESOLUTION):
+def generate(model, start_time, end_time, inputs=None, controls=None, top_p=1.0, masked_instrs=[], debug=False, delta=DELTA*TIME_RESOLUTION):
     if inputs is None:
         inputs = []
 
